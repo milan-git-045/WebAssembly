@@ -1,0 +1,15 @@
+<main class="main">
+  <div>
+    <!-- <video src="{{ videoURL }}" controls width={{this.width}} height={{this.height}}></video> -->
+    <!-- <br /> -->
+    <!-- <canvas #videoCanvas></canvas> -->
+    <div>
+      <canvas #videoCanvas id="videoCanvas" style="border: 1px solid black;"></canvas>
+
+      <div class="controls">
+        <button (click)="togglePlayback()">{{ playing ? 'Pause' : 'Play' }}</button>
+        <button (click)="downloadRGBA()" [disabled]="!rgbaBlobUrl">Download RGBA</button>
+      </div>
+    </div>
+  </div>
+</main>
