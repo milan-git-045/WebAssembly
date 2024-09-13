@@ -29,7 +29,6 @@ export class AppComponent implements OnInit {
   rgbaBlobUrl: string | null = null; // URL for downloading RGBA file
 
   videoURL = "http://localhost:4200/assets/h265-640x480-30FPS-50GOP-512Kbps-aac-16Khz-32Kbps.mp4";
-  // videoURL = "http://localhost:4200/assets/mjpeg-704x576-25FPS-50GOP-1024Kbps-aac-16Khz-32Kbps.mp4";
 
   ngOnInit() {
     this.setupCanvas();
