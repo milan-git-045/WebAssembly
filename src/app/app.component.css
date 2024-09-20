@@ -75,3 +75,31 @@
       margin-block: 1.5rem;
     }
   }
+
+  .timeline-slider {
+    width: 100%;
+    margin-top: 10px;
+  }
+  
+
+  .timeline-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-top: 10px;
+  }
+  
+  .current-time,
+  .total-time {
+    width: 50px; /* Adjust width as needed */
+    text-align: center;
+  }
+  
+  .timeline-slider {
+    flex-grow: 1;
+    margin: 0 10px;
+  }
+  
+  button {
+    margin-left: 10px;
+  }

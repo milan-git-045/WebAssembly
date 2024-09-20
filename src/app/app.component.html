@@ -3,8 +3,27 @@
     <div>
       <canvas #videoCanvas id="videoCanvas" style="border: 1px solid black;"></canvas>
       <div class="controls">
-        <button (click)="togglePlayback()">{{ playing ? 'Pause' : 'Play' }}</button>
-        <button (click)="downloadRGBA()" [disabled]="!rgbaBlobUrl">Download RGBA</button>
+        <button (click)="togglePlayback('play')">{{ playing ? 'Pause' : 'Play' }}</button>
+        <button (click)="togglePlayback('stop')" [disabled]="!playing" >Stop</button>
+
+        <select [(ngModel)]="selectedSpeed" (change)="changePlaybackSpeed($event)" style="margin-left: 10px;">
+          <option value="1">Normal</option>
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+          <option value="8">8x</option>
+          <option value="16">16x</option>
+        </select>
+        <button (click)="toggleFullscreen()"[disabled]="!playing">Full Screen</button>
+
+        <button (click)="moveBackward()" [disabled]="!playing" >Backward 5s</button>
+        <button (click)="moveForward()" [disabled]="!playing">Forward 5s</button>
+        <div class="timeline-container">
+          <span class="current-time">{{ formatTime(currentFrame / frameRate) }}</span> <!-- Current Time -->
+          <input type="range" min="0" [max]="frameDataArray.length - 1" [(ngModel)]="currentFrame"
+            (change)="onTimelineChange($event)" class="timeline-slider" />
+          <span class="total-time">{{ formatTime(frameDataArray.length / frameRate) }}</span> <!-- Total Time -->
+        </div>
+
       </div>
     </div>
   </div>

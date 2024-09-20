@@ -4,14 +4,15 @@ import { RouterOutlet } from '@angular/router';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { FileData } from '@ffmpeg/ffmpeg/dist/esm/types';
-
+import { FormsModule } from '@angular/forms';
+import { TimeLineComponent } from "./time-line/time-line.component";
 
 const baseURL = "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm";
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet],
+  imports: [CommonModule, RouterOutlet, FormsModule, TimeLineComponent],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css'],
 })
@@ -21,12 +22,16 @@ export class AppComponent implements OnInit {
   width = 640;  // Width of the video
   height = 380; // Height of the video
   private frameSize = this.width * this.height * 4; // RGBA frame size
-  private frameRate = 30; // Default frame rate (30 FPS)
+  frameRate = 30; // Default frame rate (30 FPS)
   private ffmpeg = new FFmpeg();
-  private frameDataArray: Uint8Array[] = [];
+  frameDataArray: Uint8Array[] = [];
   loaded = false;
   playing = false;
+  currentFrame = 0;
   rgbaBlobUrl: string | null = null; // URL for downloading RGBA file
+  selectedSpeed = 1;
+  intervalId: ReturnType<typeof setInterval> | null = null;
+  isDecoding = false;
 
   videoURL = "http://localhost:4200/assets/h265-640x480-30FPS-50GOP-512Kbps-aac-16Khz-32Kbps.mp4";
 
@@ -54,6 +59,7 @@ export class AppComponent implements OnInit {
     if (!this.loaded) return console.error("FFmpeg is not loaded yet.");
 
     try {
+      this.isDecoding = true;
       await this.ffmpeg.load();
       await this.ffmpeg.writeFile("input.mp4", await fetchFile(this.videoURL));
       console.log("Video file written to FFmpeg virtual filesystem.");
@@ -62,7 +68,7 @@ export class AppComponent implements OnInit {
       await this.ffmpeg.exec([
         '-ss', '00:00:00',                  // Start time
         '-i', 'input.mp4',                  // Input file
-        '-t', '00:00:30',                   // Duration (30 seconds)
+        '-t', '00:00:20',                   // Duration (30 seconds)
         '-s', `${this.width}x${this.height}`,    // Output width and height
         '-f', 'rawvideo',                   // Output format: raw video
         '-pix_fmt', 'rgba',                 // Pixel format: RGBA
@@ -76,7 +82,6 @@ export class AppComponent implements OnInit {
       if (fileData) {
         const frameData = new Uint8Array(fileData as Uint8Array);
         this.prepareFrames(frameData);
-        this.createDownloadLink(fileData);
       }
     } catch (error) {
       console.error("Error decoding video:", error);
@@ -100,37 +105,46 @@ export class AppComponent implements OnInit {
   }
 
   private renderVideoFrames() {
-    let currentFrame = 0;
-    const frameInterval = 1000 / this.frameRate; // Time per frame in milliseconds
+    const frameInterval = 1000 / (this.frameRate * this.selectedSpeed); // Time per frame in milliseconds
     const startTime = Date.now(); // Record the start time
     let isLogged = false; // Ensure logging only happens once
 
     const renderFrame = () => {
-      if (!this.playing || currentFrame >= this.frameDataArray.length) {
+      if (!this.playing || this.currentFrame >= this.frameDataArray.length) {
         // Log the time difference when the last frame is rendered
         if (!isLogged) {
           const endTime = Date.now();
           const totalTime = (endTime - startTime) / 1000; // Convert milliseconds to seconds
           console.log(`Total rendering time: ${totalTime} seconds`);
           isLogged = true; // Set to true to prevent further logging
+          this.playing = false;
         }
         return; // Stop if not playing or out of frames
       }
 
       const imageData = new ImageData(
-        new Uint8ClampedArray(this.frameDataArray[currentFrame]),
+        new Uint8ClampedArray(this.frameDataArray[this.currentFrame]),
         this.width,
         this.height
       );
+
+      // Draw the image data
       this.ctx.putImageData(imageData, 0, 0);
 
-      currentFrame++;
+      this.currentFrame++;
     };
 
+    // Clear the previous interval if it exists
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+
     // Use setInterval to maintain a consistent frame rate
-    const intervalId = setInterval(() => {
+    this.intervalId = setInterval(() => {
       if (!this.playing) {
-        clearInterval(intervalId);
+        clearInterval(this.intervalId!);
+        this.intervalId = null;
         return;
       }
       renderFrame();
@@ -142,27 +156,82 @@ export class AppComponent implements OnInit {
     this.ctx = this.videoCanvas.getContext('2d')!;
     this.videoCanvas.width = this.width;
     this.videoCanvas.height = this.height;
+
   }
 
-  private createDownloadLink(data: FileData) {
-    // Convert data to Blob and create download URL
-    const blob = new Blob([data], { type: 'application/octet-stream' });
-    this.rgbaBlobUrl = URL.createObjectURL(blob);
-  }
-
-  downloadRGBA() {
-    if (this.rgbaBlobUrl) {
-      const a = document.createElement('a');
-      a.href = this.rgbaBlobUrl;
-      a.download = 'output.rgba';
-      a.click();
-    }
-  }
-
-  togglePlayback() {
-    this.playing = !this.playing;
+  togglePlayback(action: string) {
     if (this.playing) {
-      this.decodeVideo();
+      // If currently playing, handle stopping
+      this.playing = false;
+      this.currentFrame = (action === 'stop') ? 0 : this.currentFrame;
+    } else {
+      // If not playing, start playback or decode if necessary
+      if (this.frameDataArray.length > 0) {
+        this.currentFrame = (this.currentFrame >= this.frameDataArray.length) ? 0 : this.currentFrame;
+        this.renderVideoFrames();
+        this.playing = true;
+      } else if (!this.isDecoding) {
+        this.decodeVideo();
+      }
     }
   }
+
+  onTimelineChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    this.currentFrame = +target.value; // Get the frame from the slider
+
+    // Render the selected frame immediately when the timeline changes
+    const imageData = new ImageData(
+      new Uint8ClampedArray(this.frameDataArray[this.currentFrame]),
+      this.width,
+      this.height
+    );
+    this.ctx.putImageData(imageData, 0, 0);
+  }
+
+  formatTime(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`; // MM:SS format
+  }
+
+  changePlaybackSpeed(event: Event) {
+    const target = event.target as HTMLSelectElement;  // Cast to HTMLSelectElement
+    this.selectedSpeed = +target.value;
+    if (this.playing) {
+      this.playing = false;  // Pause the current playback
+      this.renderVideoFrames();  // Re-render with the new speed
+      this.playing = true;  // Resume playback
+    }
+  }
+
+  toggleFullscreen() {
+    // const canvasElement = this.videoCanvas.nativeElement;
+    if (document.fullscreenElement) {
+      // Exit full-screen mode if already in full-screen
+      document.exitFullscreen();
+    } else {
+      // Enter full-screen mode
+      if (this.videoCanvas?.requestFullscreen) {
+        this.videoCanvas?.requestFullscreen();
+        // Optional: Start video playback when entering full-screen
+        this.playing = true;
+        this.renderVideoFrames();
+      }
+    }
+  }
+
+  moveForward() {
+    const framesToSkip = Math.floor(5 * this.frameRate); // Skip 10 seconds worth of frames
+    this.currentFrame = Math.min(this.currentFrame + framesToSkip, this.frameDataArray.length - 1);
+    this.renderVideoFrames();
+  }
+
+  moveBackward() {
+    const framesToSkip = Math.floor(5 * this.frameRate); // Skip 10 seconds worth of frames
+    this.currentFrame = Math.max(this.currentFrame - framesToSkip, 0);
+    this.renderVideoFrames();
+  }
+
 }
+
